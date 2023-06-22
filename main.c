@@ -108,6 +108,23 @@ static Token *newToken(TokenKind Kind, char *Start, char *End) {
   return Tok;
 }
 
+// 判断Str是否以SubStr开头
+static bool startsWith(char *Str, char *SubStr) {
+  // 比较LHS和RHS的N个字符是否相等
+  return strncmp(Str, SubStr, strlen(SubStr)) == 0;
+}
+
+// 读取操作符
+static int readPunct(char *Ptr) {
+  // 判断2字节的操作符
+  if (startsWith(Ptr, "==") || startsWith(Ptr, "!=") || startsWith(Ptr, "<=") ||
+      startsWith(Ptr, ">="))
+    return 2;
+
+  // 判断1字节的操作符
+  return ispunct(*Ptr) ? 1 : 0;
+}
+
 // 终结符解析
 static Token *tokenize() {
   char *P = CurrentInput;
@@ -115,7 +132,7 @@ static Token *tokenize() {
   Token *Cur = &Head;
 
   while (*P) {
-    //跳过所有空白符如: 空格, 回车
+    // 跳过所有空白符如：空格、回车
     if (isspace(*P)) {
       ++P;
       continue;
@@ -123,35 +140,35 @@ static Token *tokenize() {
 
     // 解析数字
     if (isdigit(*P)) {
-      // 初始化, 类似于c++的构造函数
-      // 我们不使用Head来存储信息, 仅用来表示链表入口, 
-      // 这样每次都是存储在Cur->Next
-      // 否则下述操作将使第一个Token的地址不在Head中
+      // 初始化，类似于C++的构造函数
+      // 我们不使用Head来存储信息，仅用来表示链表入口，这样每次都是存储在Cur->Next
+      // 否则下述操作将使第一个Token的地址不在Head中。
       Cur->Next = newToken(TK_NUM, P, P);
       // 指针前进
       Cur = Cur->Next;
       const char *OldPtr = P;
       Cur->Val = strtoul(P, &P, 10);
       Cur->Len = P - OldPtr;
-      continue;;
-    }
-
-    //解析操作符
-    if (ispunct(*P)) {
-      //操作符长度都为1
-      Cur->Next = newToken(TK_PUNCT, P, P + 1);
-      Cur = Cur->Next;
-      ++P;
       continue;
     }
 
-    //处理无法识别的字符
+    // 解析操作符
+    int PunctLen = readPunct(P);
+    if (PunctLen) {
+      Cur->Next = newToken(TK_PUNCT, P, P + PunctLen);
+      Cur = Cur->Next;
+      // 指针前进Punct的长度位
+      P += PunctLen;
+      continue;
+    }
+
+    // 处理无法识别的字符
     errorAt(P, "invalid token");
   }
 
-  //解析结束, 增加一个EOF, 表示终结符
+  // 解析结束，增加一个EOF，表示终止符。
   Cur->Next = newToken(TK_EOF, P, P);
-  //Head无内容, 所以直接返回Next
+  // Head无内容，所以直接返回Next
   return Head.Next;
 }
 
@@ -160,12 +177,16 @@ static Token *tokenize() {
 //
 
 // AST的节点类型
-typedef enum NodeKind {
+typedef enum {
   ND_ADD, // +
   ND_SUB, // -
   ND_MUL, // *
   ND_DIV, // /
   ND_NEG, // 负号-
+  ND_EQ,  // ==
+  ND_NE,  // !=
+  ND_LT,  // <
+  ND_LE,  // <=
   ND_NUM, // 整形
 } NodeKind;
 
@@ -207,18 +228,92 @@ static Node *newNum(int Val) {
   return Nd;
 }
 
-// expr = mul ("+" mul | "-" mul)*
+// expr = equality
+// equality = relational ("==" relational | "!=" relational)*
+// relational = add ("<" add | "<=" add | ">" add | ">=" add)*
+// add = mul ("+" mul | "-" mul)*
 // mul = unary ("*" unary | "/" unary)*
 // unary = ("+" | "-") unary | primary
 // primary = "(" expr ")" | num
 static Node *expr(Token **Rest, Token *Tok);
+static Node *equality(Token **Rest, Token *Tok);
+static Node *relational(Token **Rest, Token *Tok);
+static Node *add(Token **Rest, Token *Tok);
 static Node *mul(Token **Rest, Token *Tok);
 static Node *unary(Token **Rest, Token *Tok);
 static Node *primary(Token **Rest, Token *Tok);
 
+// 解析表达式
+// expr = equality
+static Node *expr(Token **Rest, Token *Tok) { return equality(Rest, Tok); }
+
+// 解析相等性
+// equality = relational ("==" relational | "!=" relational)*
+static Node *equality(Token **Rest, Token *Tok) {
+  // relational
+  Node *Nd = relational(&Tok, Tok);
+
+  // ("==" relational | "!=" relational)*
+  while (true) {
+    // "==" relational
+    if (equal(Tok, "==")) {
+      Nd = newBinary(ND_EQ, Nd, relational(&Tok, Tok->Next));
+      continue;
+    }
+
+    // "!=" relational
+    if (equal(Tok, "!=")) {
+      Nd = newBinary(ND_NE, Nd, relational(&Tok, Tok->Next));
+      continue;
+    }
+
+    *Rest = Tok;
+    return Nd;
+  }
+}
+
+// 解析比较关系
+// relational = add ("<" add | "<=" add | ">" add | ">=" add)*
+static Node *relational(Token **Rest, Token *Tok) {
+  // add
+  Node *Nd = add(&Tok, Tok);
+
+  // ("<" add | "<=" add | ">" add | ">=" add)*
+  while (true) {
+    // "<" add
+    if (equal(Tok, "<")) {
+      Nd = newBinary(ND_LT, Nd, add(&Tok, Tok->Next));
+      continue;
+    }
+
+    // "<=" add
+    if (equal(Tok, "<=")) {
+      Nd = newBinary(ND_LE, Nd, add(&Tok, Tok->Next));
+      continue;
+    }
+
+    // ">" add
+    // X>Y等价于Y<X
+    if (equal(Tok, ">")) {
+      Nd = newBinary(ND_LT, add(&Tok, Tok->Next), Nd);
+      continue;
+    }
+
+    // ">=" add
+    // X>=Y等价于Y<=X
+    if (equal(Tok, ">=")) {
+      Nd = newBinary(ND_LE, add(&Tok, Tok->Next), Nd);
+      continue;
+    }
+
+    *Rest = Tok;
+    return Nd;
+  }
+}
+
 //解析加减
-// expr = mul ("+" mul | "-" mul)*
-static Node *expr(Token **Rest, Token *Tok) {
+// add = mul ("+" mul | "-" mul)*
+static Node *add(Token **Rest, Token *Tok) {
   // mul
   Node *Nd = mul(&Tok, Tok);
 
@@ -366,6 +461,31 @@ static void genExpr(Node *Nd) {
   case ND_DIV: // / a0=a0/a1
       printf("  div a0, a0, a1\n");
       return;
+  case ND_EQ:
+  case ND_NE:
+      // a0=a0^a1，异或指令
+    printf("  xor a0, a0, a1\n");
+
+    if (Nd->Kind == ND_EQ)
+      // a0==a1
+      // a0=a0^a1, sltiu a0, a0, 1
+      // 等于0则置1
+      printf("  seqz a0, a0\n");
+    else
+      // a0!=a1
+      // a0=a0^a1, sltu a0, x0, a0
+      // 不等于0则置1
+      printf("  snez a0, a0\n");
+    return;
+   case ND_LT:
+    printf("  slt a0, a0, a1\n");
+    return;
+  case ND_LE:
+    // a0<=a1等价于
+    // a0=a1<a0, a0=a1^1
+    printf("  slt a0, a1, a0\n");
+    printf("  xori a0, a0, 1\n");
+    return;
   default:
       break;
   }
@@ -388,7 +508,7 @@ int main(int Argc, char **Argv) {
   #endif
 
   //Argv[1] = "1-8/(2*2)+3*6";
-  Argv[1] = "- - +10";
+  //Argv[1] = "- - +10";
 
   // 解析Argv[1]
   CurrentInput = Argv[1];
