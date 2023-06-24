@@ -1,5 +1,8 @@
 #include "rvcc.h"
 
+// program = stmt*
+// stmt = exprStmt
+// exprStmt = expr ";"
 // expr = equality
 // equality = relational ("==" relational | "!=" relational)*
 // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
@@ -8,6 +11,7 @@
 // unary = ("+" | "-") unary | primary
 // primary = "(" expr ")" | num
 static Node *expr(Token **Rest, Token *Tok);
+static Node *exprStmt(Token **Rest, Token *Tok);
 static Node *equality(Token **Rest, Token *Tok);
 static Node *relational(Token **Rest, Token *Tok);
 static Node *add(Token **Rest, Token *Tok);
@@ -41,6 +45,20 @@ static Node *newBinary(NodeKind Kind, Node *LHS, Node *RHS) {
 static Node *newNum(int Val) {
   Node *Nd = newNode(ND_NUM);
   Nd->Val = Val;
+  return Nd;
+}
+
+// 解析语句
+// stmt = exprStmt
+static Node *stmt(Token **Rest, Token *Tok) { 
+  return exprStmt(Rest, Tok);
+}
+
+// 解析表达式语句
+// exprStmt = expr ";"
+static Node *exprStmt(Token **Rest, Token *Tok) {
+  Node *Nd = newUnary(ND_EXPR_STMT, expr(&Tok, Tok));
+  *Rest = skip(Tok, ";");
   return Nd;
 }
 
@@ -199,9 +217,15 @@ static Node *primary(Token **Rest, Token *Tok) {
 }
 
 // 语法解析入口函数
+// program = stmt*
 Node *parse(Token *Tok) {
-  Node *Nd = expr(&Tok, Tok);
-  if (Tok->Kind != TK_EOF)
-    errorTok(Tok, "extra token");
-  return Nd;
+  // 这里使用了和词法分析类似的单向链表结构
+  Node Head = {};
+  Node *Cur = &Head;
+  // stmt*
+  while (Tok->Kind != TK_EOF) {
+    Cur->Next = stmt(&Tok, Tok);
+    Cur = Cur->Next;
+  }
+  return Head.Next;
 }
