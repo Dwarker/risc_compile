@@ -84,6 +84,17 @@ static Token *newToken(TokenKind Kind, char *Start, char *End) {
   return Tok;
 }
 
+// 判断标记符的首字母规则
+// [a-zA-Z_]
+static bool isIdent1(char C) {
+  // a-z与A-Z在ASCII中不相连，所以需要分别判断
+  return ('a' <= C && C <= 'z') || ('A' <= C && C <= 'Z') || C == '_';
+}
+
+// 判断标记符的非首字母的规则
+// [a-zA-Z0-9_]
+static bool isIdent2(char C) { return isIdent1(C) || ('0' <= C && C <= '9'); }
+
 // 判断Str是否以SubStr开头
 static bool startsWith(char *Str, char *SubStr) {
   // 比较LHS和RHS的N个字符是否相等
@@ -129,10 +140,14 @@ Token *tokenize(char *P) {
     }
 
     // 解析标记符
-    if ('a' <= *P && *P <= 'z') {
-      Cur->Next = newToken(TK_IDENT, P, P + 1);
+    // [a-zA-Z_][a-zA-Z0-9_]*
+    if (isIdent1(*P)) {
+      char *Start = P;
+      do {
+        ++P;
+      } while (isIdent2(*P));
+      Cur->Next = newToken(TK_IDENT, Start, P);
       Cur = Cur->Next;
-      ++P;
       continue;
     }
 
