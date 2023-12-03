@@ -6,7 +6,7 @@ Obj *Locals;
 // program = "{" compoundStmt
 // compoundStmt = stmt* "}"
 // stmt = "return" expr ";" | "{" compoundStmt | exprStmt
-// exprStmt = expr ";"
+// exprStmt = expr? ";"
 // expr = assign
 // assign = equality ("=" assign)?
 // equality = relational ("==" relational | "!=" relational)*
@@ -15,6 +15,7 @@ Obj *Locals;
 // mul = unary ("*" unary | "/" unary)*
 // unary = ("+" | "-") unary | primary
 // primary = "(" expr ")" | ident | num
+static Node *compoundStmt(Token **rest, Token *tok);
 static Node *expr(Token **Rest, Token *Tok);
 static Node *exprStmt(Token **Rest, Token *Tok);
 static Node *assign(Token **Rest, Token *Tok);
@@ -24,7 +25,6 @@ static Node *add(Token **Rest, Token *Tok);
 static Node *mul(Token **Rest, Token *Tok);
 static Node *unary(Token **Rest, Token *Tok);
 static Node *primary(Token **Rest, Token *Tok);
-static Node *compoundStmt(Token **rest, Token *tok);
 
 // 通过名称，查找一个本地变量
 static Obj *findVar(Token *Tok) {
@@ -85,7 +85,7 @@ static Obj *newLVar(char *Name) {
 
 // 解析语句
 // stmt = "return" expr ";" | "{" compoundStmt | exprStmt
-static Node *stmt(Token **Rest, Token *Tok) { 
+static Node *stmt(Token **Rest, Token *Tok) {
   // "return" expr ";"
   if (equal(Tok, "return")) {
     Node *Nd = newUnary(ND_RETURN, expr(&Tok, Tok->Next));
@@ -94,9 +94,8 @@ static Node *stmt(Token **Rest, Token *Tok) {
   }
 
   // "{" compoundStmt
-  if (equal(Tok, "{")) {
+  if (equal(Tok, "{"))
     return compoundStmt(Rest, Tok->Next);
-  }
 
   // exprStmt
   return exprStmt(Rest, Tok);
@@ -108,8 +107,7 @@ static Node *compoundStmt(Token **Rest, Token *Tok) {
   // 这里使用了和词法分析类似的单向链表结构
   Node Head = {};
   Node *Cur = &Head;
-
-  // stmt* "}" //{ {1; {2;} return 3;} }
+  // stmt* "}"
   while (!equal(Tok, "}")) {
     Cur->Next = stmt(&Tok, Tok);
     Cur = Cur->Next;
@@ -122,8 +120,15 @@ static Node *compoundStmt(Token **Rest, Token *Tok) {
 }
 
 // 解析表达式语句
-// exprStmt = expr ";"
+// exprStmt = expr? ";"
 static Node *exprStmt(Token **Rest, Token *Tok) {
+  // ";"
+  if (equal(Tok, ";")) {
+    *Rest = Tok->Next;
+    return newNode(ND_BLOCK);
+  }
+
+  // expr ";"
   Node *Nd = newUnary(ND_EXPR_STMT, expr(&Tok, Tok));
   *Rest = skip(Tok, ";");
   return Nd;
