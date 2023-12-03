@@ -84,6 +84,12 @@ static Token *newToken(TokenKind Kind, char *Start, char *End) {
   return Tok;
 }
 
+// 判断Str是否以SubStr开头
+static bool startsWith(char *Str, char *SubStr) {
+  // 比较LHS和RHS的N个字符是否相等
+  return strncmp(Str, SubStr, strlen(SubStr)) == 0;
+}
+
 // 判断标记符的首字母规则
 // [a-zA-Z_]
 static bool isIdent1(char C) {
@@ -94,12 +100,6 @@ static bool isIdent1(char C) {
 // 判断标记符的非首字母的规则
 // [a-zA-Z0-9_]
 static bool isIdent2(char C) { return isIdent1(C) || ('0' <= C && C <= '9'); }
-
-// 判断Str是否以SubStr开头
-static bool startsWith(char *Str, char *SubStr) {
-  // 比较LHS和RHS的N个字符是否相等
-  return strncmp(Str, SubStr, strlen(SubStr)) == 0;
-}
 
 // 读取操作符
 static int readPunct(char *Ptr) {
@@ -112,12 +112,11 @@ static int readPunct(char *Ptr) {
   return ispunct(*Ptr) ? 1 : 0;
 }
 
-// 将名为"return"的终结符转为KEYWORD
+// 将名为“return”的终结符转为KEYWORD
 static void convertKeywords(Token *Tok) {
   for (Token *T = Tok; T->Kind != TK_EOF; T = T->Next) {
-    if (equal(T, "return")) {
+    if (equal(T, "return"))
       T->Kind = TK_KEYWORD;
-    }
   }
 }
 
@@ -176,7 +175,7 @@ Token *tokenize(char *P) {
 
   // 解析结束，增加一个EOF，表示终止符。
   Cur->Next = newToken(TK_EOF, P, P);
-  // 将所有关键字的终结符, 都标记为KEYWORD
+  // 将所有关键字的终结符，都标记为KEYWORD
   convertKeywords(Head.Next);
   // Head无内容，所以直接返回Next
   return Head.Next;
