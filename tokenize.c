@@ -35,7 +35,6 @@ static void verrorAt(char *Loc, char *Fmt, va_list VA) {
   vfprintf(stderr, Fmt, VA);
   fprintf(stderr, "\n");
   va_end(VA);
-  exit(1);
 }
 
 // 字符解析出错
@@ -43,6 +42,7 @@ void errorAt(char *Loc, char *Fmt, ...) {
   va_list VA;
   va_start(VA, Fmt);
   verrorAt(Loc, Fmt, VA);
+  exit(1);
 }
 
 // Tok解析出错
@@ -50,6 +50,7 @@ void errorTok(Token *Tok, char *Fmt, ...) {
   va_list VA;
   va_start(VA, Fmt);
   verrorAt(Tok->Loc, Fmt, VA);
+  exit(1);
 }
 
 // 判断Tok的值是否等于指定值，没有用char，是为了后续拓展
@@ -115,11 +116,11 @@ static int readPunct(char *Ptr) {
 // 判断是否为关键字
 static bool isKeyword(Token *Tok) {
   // 关键字列表
-  static char *KW[] = {"return", "if", "else", "for", "while"};
+  static char *Kw[] = {"return", "if", "else", "for", "while"};
 
   // 遍历关键字列表匹配
-  for (int I = 0; I < sizeof(KW) / sizeof(*KW); ++I) {
-    if (equal(Tok, KW[I]))
+  for (int I = 0; I < sizeof(Kw) / sizeof(*Kw); ++I) {
+    if (equal(Tok, Kw[I]))
       return true;
   }
 
