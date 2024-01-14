@@ -8,6 +8,7 @@ Obj *Locals;
 // stmt = "return" expr ";"
 //        | "if" "(" expr ")" stmt ("else" stmt)?
 //        | "for" "(" exprStmt expr? ";" expr? ")" stmt
+//        | "while" "(" expr ")" stmt
 //        | "{" compoundStmt
 //        | exprStmt
 // exprStmt = expr? ";"
@@ -145,6 +146,20 @@ static Node *stmt(Token **Rest, Token *Tok) {
     //stmt
     Nd->Then = stmt(Rest, Tok);
 
+    return Nd;
+  }
+
+  //"while" "(" expr ")" stmt
+  if (equal(Tok, "while")) {
+    Node *Nd = newNode(ND_FOR);
+    //"("
+    Tok = skip(Tok->Next, "(");
+    //expr
+    Nd->Cond = expr(&Tok, Tok);
+    //")"
+    Tok = skip(Tok, ")");
+    //stmt
+    Nd->Then = stmt(Rest, Tok);
     return Nd;
   }
 
